@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -22,14 +23,19 @@ public partial class MainWindow : Window
     private static string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LlamaMonita", "settings.json");
 
-    public MainWindow(string? url, string? apiKey, string? screenshotPath)
+    public MainWindow(string? url, string? apiKey, string? screenshotPath, Size? size = null)
     {
         InitializeComponent();
         DataContext = _vm;
         _apiKey = apiKey;
         _screenshotPath = screenshotPath;
+        if (size is { } sz) { Width = sz.Width; Height = sz.Height; }
         UrlBox.Text = url ?? LoadSavedUrl() ?? App.DefaultUrl;
         _client = new LlamaClient(UrlBox.Text, _apiKey);
+        _vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainVm.ShowModels)) UpdateLayoutMode();
+        };
 
         SourceInitialized += (_, _) =>
         {
@@ -39,6 +45,82 @@ public partial class MainWindow : Window
         Loaded += (_, _) => _ = Task.Run(() => PollLoopAsync(_cts.Token));
         Closed += (_, _) => _cts.Cancel();
     }
+
+    // ---- responsive layout ---------------------------------------------------------------------
+    //
+    // The two history graphs always stay on screen and absorb all spare space. Everything else is
+    // dropped in steps as the window shrinks:
+    //   details row -> memory bars / footers -> sensor and token tiles -> connection bar.
+    // Below the "mini" threshold only the headline number and its graph remain, so the window can
+    // sit in a corner of the desktop. There is no upper limit: on a large window the graphs grow.
+
+    private void Shell_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateLayoutMode();
+
+    private void UpdateLayoutMode()
+    {
+        double w = Shell.ActualWidth, h = Shell.ActualHeight;
+        if (w <= 0 || h <= 0) return;
+
+        bool mini = h < 300 || w < 440;
+        bool side = mini ? w >= 400 : w >= 760;
+        double heroWidth = side ? w / 2 : w;
+
+        bool infoOneRow = w >= 1000;
+        double infoHeight = infoOneRow ? 170 : 330;
+        double barHeight = mini ? 0 : 48;
+        bool showInfo = !mini && h - barHeight - infoHeight >= (side ? 250 : 470);
+        double heroArea = h - barHeight - (showInfo ? infoHeight : 0);
+
+        _vm.ShowTopBar = !mini;
+        _vm.ShowInfo = showInfo;
+        _vm.ShowTiles = heroWidth >= 420;
+        _vm.ShowFooter = !mini && heroArea >= (side ? 250 : 500);
+
+        Shell.Padding = new Thickness(mini ? 8 : 16);
+        InfoGrid.Rows = infoOneRow ? 1 : 0;
+        InfoGrid.Columns = infoOneRow ? 0 : 2;
+
+        double gap = mini ? 4 : 6;
+        if (side)
+        {
+            HeroCol1.Width = new GridLength(1, GridUnitType.Star);
+            HeroRow1.Height = new GridLength(0);
+            Grid.SetRow(GenHero, 0); Grid.SetColumn(GenHero, 1);
+            GpuHero.Margin = new Thickness(0, 0, gap, 0);
+            GenHero.Margin = new Thickness(gap, 0, 0, 0);
+        }
+        else
+        {
+            HeroCol1.Width = new GridLength(0);
+            HeroRow1.Height = new GridLength(1, GridUnitType.Star);
+            Grid.SetRow(GenHero, 1); Grid.SetColumn(GenHero, 0);
+            GpuHero.Margin = new Thickness(0, 0, 0, gap);
+            GenHero.Margin = new Thickness(0, gap, 0, 0);
+        }
+    }
+
+    private void SetClientSize(double width, double height)
+    {
+        WindowState = WindowState.Normal;
+        Width = width;
+        Height = height;
+    }
+
+    private void SizeCompact_Click(object sender, RoutedEventArgs e) => SetClientSize(460, 200);
+    private void SizeGraphs_Click(object sender, RoutedEventArgs e) => SetClientSize(900, 420);
+    private void SizeStandard_Click(object sender, RoutedEventArgs e) => SetClientSize(1080, 760);
+
+    private void SetPinned(bool pinned)
+    {
+        Topmost = pinned;
+        PinToggle.IsChecked = pinned;
+        PinMenu.IsChecked = pinned;
+    }
+
+    private void PinToggle_Click(object sender, RoutedEventArgs e) => SetPinned(PinToggle.IsChecked == true);
+    private void PinMenu_Click(object sender, RoutedEventArgs e) => SetPinned(PinMenu.IsChecked);
+
+    // ---- polling -------------------------------------------------------------------------------
 
     private async Task PollLoopAsync(CancellationToken ct)
     {
@@ -59,7 +141,7 @@ public partial class MainWindow : Window
                     _vm.ApplyHardware(g, s, pids.Length);
                     _vm.ApplyServer(server);
                 });
-                if (_screenshotPath is not null && ++ticks == 12)
+                if (_screenshotPath is not null && ++ticks == 14)
                     await Dispatcher.InvokeAsync(() => { SaveScreenshot(_screenshotPath); Close(); });
             } while (await timer.WaitForNextTickAsync(ct));
         }
@@ -89,8 +171,6 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.Enter) Connect();
     }
-
-    private void Pin_Changed(object sender, RoutedEventArgs e) => Topmost = PinBox.IsChecked == true;
 
     private static string? LoadSavedUrl()
     {

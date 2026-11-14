@@ -27,7 +27,7 @@ public sealed class History
     public double[] Push(double v)
     {
         _q.Enqueue(v);
-        while (_q.Count > Sparkline.Capacity) _q.Dequeue();
+        while (_q.Count > HistoryChart.Capacity) _q.Dequeue();
         return _q.ToArray();
     }
 }
@@ -35,8 +35,10 @@ public sealed class History
 public sealed class GpuVm : Observable
 {
     private readonly History _history = new();
-    private string _name = "", _kind = "GPU", _utilText = "0", _engine = "", _dedText = "", _sharedText = "", _sensors = "";
+    private string _name = "", _kind = "GPU", _utilText = "0", _engine = "", _dedText = "", _sharedText = "",
+        _temp = "", _fan = "", _power = "";
     private double _dedFrac, _sharedFrac;
+    private bool _hasTemp, _hasFan, _hasPower;
     private double[] _util = Array.Empty<double>();
 
     public string Name { get => _name; set => Set(ref _name, value); }
@@ -47,7 +49,13 @@ public sealed class GpuVm : Observable
     public string SharedText { get => _sharedText; set => Set(ref _sharedText, value); }
     public double DedicatedFraction { get => _dedFrac; set => Set(ref _dedFrac, value); }
     public double SharedFraction { get => _sharedFrac; set => Set(ref _sharedFrac, value); }
-    public string Sensors { get => _sensors; set => Set(ref _sensors, value); }
+    public string TempText { get => _temp; set => Set(ref _temp, value); }
+    public string FanText { get => _fan; set => Set(ref _fan, value); }
+    public string PowerText { get => _power; set => Set(ref _power, value); }
+    // A sensor tile appears once the driver has reported a value, and then stays.
+    public bool HasTemp { get => _hasTemp; set => Set(ref _hasTemp, value); }
+    public bool HasFan { get => _hasFan; set => Set(ref _hasFan, value); }
+    public bool HasPower { get => _hasPower; set => Set(ref _hasPower, value); }
     public double[] UtilHistory { get => _util; set => Set(ref _util, value); }
 
     public void Apply(GpuAdapterReading r)
@@ -56,28 +64,40 @@ public sealed class GpuVm : Observable
         Name = a.Name;
         Kind = a.Integrated switch { true => "iGPU", false => "dGPU", _ => "GPU" };
         UtilText = r.UtilPercent.ToString("0");
-        Engine = r.UtilPercent >= 1 && r.TopEngine.Length > 0 ? r.TopEngine : "";
+        Engine = r.UtilPercent >= 1 ? PrettyEngine(r.TopEngine) : "";
         DedicatedText = $"{Fmt.Gb(r.DedicatedUsed)} / {Fmt.Gb((long)a.DedicatedTotal)} GB";
         SharedText = $"{Fmt.Gb(r.SharedUsed)} / {Fmt.Gb((long)a.SharedTotal)} GB";
         DedicatedFraction = a.DedicatedTotal > 0 ? Math.Clamp(r.DedicatedUsed / (double)a.DedicatedTotal, 0, 1) : 0;
         SharedFraction = a.SharedTotal > 0 ? Math.Clamp(r.SharedUsed / (double)a.SharedTotal, 0, 1) : 0;
-        var parts = new List<string>();
-        if (r.TemperatureC is { } t) parts.Add($"{t:0} °C");
-        if (r.FanRpm is { } f) parts.Add($"{f:N0} rpm");
-        if (r.PowerPercent is { } p) parts.Add($"power {p:0}%");
-        Sensors = parts.Count > 0 ? string.Join("   ·   ", parts) : "temperature / fan / power: not reported by driver";
+        if (r.TemperatureC is { } t) { TempText = $"{t:0} °C"; HasTemp = true; } else TempText = "—";
+        if (r.FanRpm is { } f) { FanText = $"{f:N0} rpm"; HasFan = true; } else FanText = "—";
+        if (r.PowerPercent is { } p) { PowerText = $"{p:0}%"; HasPower = true; } else PowerText = "—";
         UtilHistory = _history.Push(r.UtilPercent);
+    }
+
+    // "Compute 0" -> "Compute", "3d" -> "3D", "videodecode" -> "Video decode"
+    private static string PrettyEngine(string raw)
+    {
+        string s = raw.TrimEnd(' ', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9').ToLowerInvariant();
+        return s switch
+        {
+            "" => "",
+            "3d" => "3D",
+            "videodecode" => "Video decode",
+            "videoencode" => "Video encode",
+            "videoprocessing" => "Video processing",
+            _ => char.ToUpperInvariant(s[0]) + s[1..],
+        };
     }
 }
 
 public sealed class SlotVm : Observable
 {
-    private string _title = "", _state = "", _detail = "";
+    private string _title = "", _detail = "";
     private double _fraction;
     private Brush _stateBrush = Palette.Muted;
 
     public string Title { get => _title; set => Set(ref _title, value); }
-    public string State { get => _state; set => Set(ref _state, value); }
     public Brush StateBrush { get => _stateBrush; set => Set(ref _stateBrush, value); }
     public string Detail { get => _detail; set => Set(ref _detail, value); }
     public double Fraction { get => _fraction; set => Set(ref _fraction, value); }
@@ -123,15 +143,17 @@ public sealed class MainVm : Observable
     }
 
     private readonly Dictionary<int, SlotTrack> _tracks = new();
-    private readonly History _tpsHistory = new();
+    private readonly History _tpsHistory = new(), _cpuHistory = new(), _ramHistory = new();
     private long _sessionPrompt, _sessionGenerated;
+    private const double SpeedWindowSeconds = 5;
+    private readonly Queue<(long Stamp, long Generated)> _genWindow = new();
 
     private string _status = "Connecting…", _serverInfo = "", _modelName = "—", _modelDetail = "", _state = "", _tps = "0.0",
-        _session = "", _serverTotals = "", _cpuText = "", _ramText = "", _procText = "", _slotsNote = "";
+        _sessionPromptText = "0", _sessionGeneratedText = "0", _serverTotals = "", _cpuText = "", _ramText = "", _procText = "",
+        _slotsNote = "", _title = "LlamaMonita";
     private Brush _statusBrush = Palette.Muted, _stateBrush = Palette.Muted;
-    private double _cpuFrac, _ramFrac;
-    private double[] _tpsValues = Array.Empty<double>();
-    private bool _showModels;
+    private double[] _tpsValues = Array.Empty<double>(), _cpuValues = Array.Empty<double>(), _ramValues = Array.Empty<double>();
+    private bool _showModels, _showTopBar = true, _showInfo = true, _showTiles = true, _showFooter = true;
 
     public ObservableCollection<GpuVm> Gpus { get; } = new();
     public ObservableCollection<SlotVm> Slots { get; } = new();
@@ -146,19 +168,28 @@ public sealed class MainVm : Observable
     public Brush StateBrush { get => _stateBrush; set => Set(ref _stateBrush, value); }
     public string TokensPerSecond { get => _tps; set => Set(ref _tps, value); }
     public double[] TpsHistory { get => _tpsValues; set => Set(ref _tpsValues, value); }
-    public string Session { get => _session; set => Set(ref _session, value); }
+    public string SessionPrompt { get => _sessionPromptText; set => Set(ref _sessionPromptText, value); }
+    public string SessionGenerated { get => _sessionGeneratedText; set => Set(ref _sessionGeneratedText, value); }
     public string ServerTotals { get => _serverTotals; set => Set(ref _serverTotals, value); }
     public string CpuText { get => _cpuText; set => Set(ref _cpuText, value); }
-    public double CpuFraction { get => _cpuFrac; set => Set(ref _cpuFrac, value); }
+    public double[] CpuHistory { get => _cpuValues; set => Set(ref _cpuValues, value); }
     public string RamText { get => _ramText; set => Set(ref _ramText, value); }
-    public double RamFraction { get => _ramFrac; set => Set(ref _ramFrac, value); }
+    public double[] RamHistory { get => _ramValues; set => Set(ref _ramValues, value); }
     public string ProcessText { get => _procText; set => Set(ref _procText, value); }
     public string SlotsNote { get => _slotsNote; set => Set(ref _slotsNote, value); }
     public bool ShowModels { get => _showModels; set => Set(ref _showModels, value); }
+    public string WindowTitle { get => _title; set => Set(ref _title, value); }
+
+    // Responsive layout switches, set by the window from its current size.
+    public bool ShowTopBar { get => _showTopBar; set => Set(ref _showTopBar, value); }
+    public bool ShowInfo { get => _showInfo; set => Set(ref _showInfo, value); }
+    public bool ShowTiles { get => _showTiles; set => Set(ref _showTiles, value); }
+    public bool ShowFooter { get => _showFooter; set => Set(ref _showFooter, value); }
 
     public void ResetSession()
     {
         _tracks.Clear();
+        _genWindow.Clear();
         _sessionPrompt = _sessionGenerated = 0;
     }
 
@@ -169,14 +200,13 @@ public sealed class MainVm : Observable
         for (int i = 0; i < gpu.Adapters.Count; i++) Gpus[i].Apply(gpu.Adapters[i]);
 
         CpuText = $"{sys.CpuPercent:0}%";
-        CpuFraction = sys.CpuPercent / 100.0;
+        CpuHistory = _cpuHistory.Push(sys.CpuPercent);
         long used = (long)(sys.RamTotal - sys.RamAvailable);
         RamText = $"{Fmt.Gb(used)} / {Fmt.Gb((long)sys.RamTotal)} GB";
-        RamFraction = sys.RamTotal > 0 ? used / (double)sys.RamTotal : 0;
+        RamHistory = _ramHistory.Push(sys.RamTotal > 0 ? 100.0 * used / sys.RamTotal : 0);
         ProcessText = llamaProcesses == 0
-            ? "No local llama-server process (remote server, or not running)"
-            : $"{llamaProcesses} local llama-server process{(llamaProcesses > 1 ? "es" : "")}   ·   GPU {gpu.WatchUtilPercent:0}%   ·   " +
-              $"{Fmt.Gb(gpu.WatchShared)} GB shared + {Fmt.Gb(gpu.WatchDedicated)} GB dedicated";
+            ? "No local llama-server process"
+            : $"llama-server ×{llamaProcesses}:  GPU {gpu.WatchUtilPercent:0}%  ·  {Fmt.Gb(gpu.WatchShared)} GB shared + {Fmt.Gb(gpu.WatchDedicated)} GB dedicated";
     }
 
     public void ApplyServer(LlamaSnapshot s)
@@ -195,12 +225,13 @@ public sealed class MainVm : Observable
             ShowModels = false;
             SlotsNote = "";
             PushTps(0);
+            WindowTitle = "LlamaMonita — disconnected";
             return;
         }
 
         Status = "Connected";
         StatusBrush = Palette.Green;
-        ServerInfo = (s.IsRouter ? "router mode" : "single model") + (s.BuildInfo is null ? "" : $"   ·   {s.BuildInfo}");
+        ServerInfo = (s.IsRouter ? "router mode" : "single model") + (s.BuildInfo is null ? "" : $"  ·  {s.BuildInfo}");
 
         // models (router mode)
         ShowModels = s.IsRouter;
@@ -213,12 +244,13 @@ public sealed class MainVm : Observable
             Models[i].Brush = s.Models[i].Status switch { "loaded" => Palette.Green, "loading" => Palette.Amber, _ => Palette.Muted };
         }
 
-        ModelName = string.IsNullOrEmpty(s.ActiveModel) ? "No model loaded" : s.ActiveModel;
+        bool hasModel = !string.IsNullOrEmpty(s.ActiveModel);
+        ModelName = hasModel ? s.ActiveModel! : "No model loaded";
         var detail = new List<string>();
         if (!string.IsNullOrEmpty(s.Ftype)) detail.Add(s.Ftype);
-        if (s.NCtxPerSlot > 0) detail.Add($"ctx {s.NCtxPerSlot:N0}" + (s.TotalSlots > 1 ? $" × {s.TotalSlots} slots" : ""));
+        if (s.NCtxPerSlot > 0) detail.Add($"ctx {s.NCtxPerSlot:N0}" + (s.TotalSlots > 1 ? $" × {s.TotalSlots}" : ""));
         if (s.Vision) detail.Add("vision");
-        ModelDetail = string.Join("   ·   ", detail);
+        ModelDetail = string.Join("  ·  ", detail);
 
         // slots and throughput
         double tps = 0;
@@ -244,9 +276,6 @@ public sealed class MainVm : Observable
                 t.Stamp = now;
             }
 
-            double seconds = Stopwatch.GetElapsedTime(t.Stamp, now).TotalSeconds;
-            if (slot.IsProcessing && slot.Decoded > t.Decoded && seconds > 0.2)
-                tps += (slot.Decoded - t.Decoded) / seconds;
             t.Prompt = Math.Max(t.Prompt, slot.PromptTokens);
             t.Decoded = slot.Decoded;
             t.Stamp = now;
@@ -254,38 +283,54 @@ public sealed class MainVm : Observable
             liveGenerated += t.Decoded - t.DecodedBase;
 
             var vm = Slots[i];
-            vm.Title = $"Slot {slot.Id}";
-            vm.State = slot.IsProcessing ? "generating" : "idle";
+            vm.Title = slot.Id.ToString();
             vm.StateBrush = slot.IsProcessing ? Palette.Green : Palette.Muted;
             int usedCtx = slot.PromptTokens + slot.Decoded;
-            vm.Detail = $"{usedCtx:N0} / {slot.NCtx:N0} tokens" + (slot.Speculative ? "   ·   speculative" : "");
+            vm.Detail = $"{usedCtx:N0} / {slot.NCtx:N0}";
             vm.Fraction = slot.NCtx > 0 ? Math.Clamp(usedCtx / (double)slot.NCtx, 0, 1) : 0;
         }
-        SlotsNote = s.SlotsAvailable ? "" : (s.ActiveModel is null || s.Loading ? "" : "/slots is disabled on this server (--no-slots)");
+        SlotsNote = s.SlotsAvailable || !hasModel || s.Loading ? "" : "/slots is disabled on this server";
 
         bool busy = s.Slots.Any(x => x.IsProcessing);
+
+        // Generation speed over a sliding window: /slots advances in bursts (more so with speculative
+        // decoding), so a one-second difference is too noisy to read.
+        long totalGenerated = _sessionGenerated + liveGenerated;
+        _genWindow.Enqueue((now, totalGenerated));
+        while (_genWindow.Count > (busy ? 2 : 1) &&
+               (!busy || Stopwatch.GetElapsedTime(_genWindow.Peek().Stamp, now).TotalSeconds > SpeedWindowSeconds))
+            _genWindow.Dequeue();
+        if (busy && _genWindow.Count > 1)
+        {
+            var first = _genWindow.Peek();
+            double span = Stopwatch.GetElapsedTime(first.Stamp, now).TotalSeconds;
+            if (span > 0.5) tps = (totalGenerated - first.Generated) / span;
+        }
+
         (State, StateBrush) = s switch
         {
             { Loading: true } => ("Loading model…", Palette.Amber),
-            { ActiveModel: null or "" } => ("Idle — no model loaded", Palette.Muted),
+            _ when !hasModel => ("No model loaded", Palette.Muted),
             { Sleeping: true } => ("Sleeping", Palette.Muted),
             _ when busy => ("Generating", Palette.Green),
             _ => ("Idle", Palette.Muted),
         };
 
         PushTps(tps);
-        Session = $"This session:   {_sessionPrompt + livePrompt:N0} prompt   ·   {_sessionGenerated + liveGenerated:N0} generated tokens";
+        SessionPrompt = (_sessionPrompt + livePrompt).ToString("N0");
+        SessionGenerated = (_sessionGenerated + liveGenerated).ToString("N0");
         if (s.Metrics is { } m)
         {
             m.TryGetValue("prompt_tokens_total", out double pt);
             m.TryGetValue("tokens_predicted_total", out double gt);
             m.TryGetValue("predicted_tokens_seconds", out double avg);
-            ServerTotals = $"Server total:   {pt:N0} prompt   ·   {gt:N0} generated   ·   avg {avg:0.0} tok/s";
+            ServerTotals = $"Server total:  {pt:N0} prompt  ·  {gt:N0} generated  ·  avg {avg:0.0} tok/s";
         }
         else
         {
-            ServerTotals = "Server totals: start llama-server with --metrics to enable";
+            ServerTotals = "Server totals need --metrics";
         }
+        WindowTitle = hasModel ? $"LlamaMonita — {ModelName} · {TokensPerSecond} tok/s" : "LlamaMonita";
     }
 
     private void PushTps(double tps)
