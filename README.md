@@ -26,6 +26,12 @@ LlamaMonita shows, in one window:
 - **Read-only.** It only sends `GET` requests. In router mode it never queries a model that is not already loaded, so watching cannot trigger a model load or swap.
 - **Works without `--metrics`.** Live speed and session token counts come from `/slots`. If the server was started with `--metrics`, server-wide totals are shown as well.
 
+## Download
+
+Get `LlamaMonita-<version>-win-x64.zip` from the [Releases page](https://github.com/nabe2030/llama-monita/releases/latest), unzip it anywhere and run `LlamaMonita.exe`. There is no installer and nothing is written outside the folder except the remembered server address (`%LOCALAPPDATA%\LlamaMonita\settings.json`).
+
+The exe is not code-signed, so Windows SmartScreen may ask for confirmation the first time ("More info" → "Run anyway").
+
 ## Requirements
 
 - Windows 11 (Windows 10 2004 or later should work, untested)
