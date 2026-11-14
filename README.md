@@ -4,11 +4,11 @@ An nvtop-style desktop monitor for [llama.cpp](https://github.com/ggml-org/llama
 
 "Monita" is モニタ, Japanese for *monitor*. Released to celebrate llama.cpp 1.0.
 
-![LlamaMonita watching a llama-server on a Radeon 780M: GPU utilization in blue, generation speed in green](docs/history/04-fixed-layout.png)
+![LlamaMonita watching a llama-server on a Radeon 780M: GPU utilization in blue, generation speed in green](docs/history/05-request-log.png)
 
-The blue area is GPU utilization (left axis) and the green line is generation speed (right axis). The window can shrink down to a small always-on-top strip:
+The blue area is GPU utilization (left axis) and the green line is generation speed (right axis). Below it are the models, the system load and the request log. The window can shrink down to a small always-on-top strip:
 
-![Compact view](docs/history/04-fixed-layout-compact.png)
+![Compact view](docs/history/05-request-log-compact.png)
 
 How the screen got here is recorded in [docs/history](docs/history/README.md).
 
@@ -17,6 +17,7 @@ LlamaMonita shows, in one window:
 - **llama-server**: loaded model, quantization, context size, per-slot activity and context usage, live generation speed (tok/s), tokens processed this session, and the status of every model in router mode
 - **GPU**: utilization, dedicated and shared GPU memory, temperature, fan speed and power where the driver reports them
 - **System**: CPU, RAM, and the GPU memory held by local `llama-server` processes
+- **Requests**: when each request started, where it came from (LAN address or local process), which model handled it, tokens, duration and speed. Finished requests are also appended to a monthly CSV file, with per-day totals shown in the window
 
 ## Why another monitor
 
@@ -47,6 +48,47 @@ LlamaMonita.exe [--url http://127.0.0.1:8080] [--api-key KEY]
 The API key can also be supplied through the `LLAMA_API_KEY` environment variable. The last URL you connect to is remembered.
 
 `LlamaMonita.exe --probe out.json` writes a few samples of every data source to a file without opening a window. Attach it to bug reports.
+
+### Request history
+
+llama-server only counts tokens in memory, and in router mode the counters restart whenever the model is swapped. LlamaMonita therefore keeps its own record: every finished request is appended to
+
+```
+%LOCALAPPDATA%\LlamaMonita\requests\requests-YYYY-MM.csv
+```
+
+with the columns `started, finished, server, from, model, slot, prompt_tokens, generated_tokens, seconds, tokens_per_second`. Only requests that happen while LlamaMonita is running are recorded, and requests shorter than about a second can be missed (the server is polled once a second). The client address in `from` is read from the Windows TCP connection table, so it is only filled in when llama-server runs on the same PC. Use `--log-dir PATH` to write the file elsewhere; right-click the window to open the folder.
+
+### Prometheus / Grafana
+
+Start LlamaMonita with `--metrics-listen` to expose what it sees in Prometheus format:
+
+```
+LlamaMonita.exe --metrics-listen 9777            # http://127.0.0.1:9777/metrics, this PC only
+LlamaMonita.exe --metrics-listen 0.0.0.0:9777    # reachable from the LAN (Windows will ask to allow it)
+```
+
+| Metric | Type | Labels |
+|---|---|---|
+| `llamamonita_requests_total` | counter | `model`, `from` |
+| `llamamonita_prompt_tokens_total`, `llamamonita_generated_tokens_total` | counter | `model`, `from` |
+| `llamamonita_request_seconds_total` | counter | `model`, `from` |
+| `llamamonita_generation_tokens_per_second`, `llamamonita_slots_processing` | gauge | — |
+| `llamamonita_model_loaded`, `llamamonita_server_up` | gauge | `model` / `server` |
+| `llamamonita_gpu_utilization_percent`, `llamamonita_gpu_temperature_celsius` | gauge | `gpu` |
+| `llamamonita_gpu_memory_bytes`, `llamamonita_gpu_memory_limit_bytes` | gauge | `gpu`, `kind` (`dedicated` / `shared`) |
+| `llamamonita_cpu_percent`, `llamamonita_ram_bytes` | gauge | `kind` (`used` / `total`) |
+
+The counters start at zero when LlamaMonita starts, as Prometheus counters do; use `increase()` or `rate()` in queries, for example `sum by (model) (increase(llamamonita_generated_tokens_total[1d]))` for tokens per day and model. Example scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: llamamonita
+    static_configs:
+      - targets: ["<address of the PC running LlamaMonita>:9777"]
+```
+
+Versions and changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Build
 

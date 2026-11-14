@@ -41,11 +41,19 @@ public sealed class LlamaClient : IDisposable
     private readonly Uri _base;
     private int _metricsRetryIn;
 
+    /// <summary>TCP port of the server.</summary>
+    public int Port { get; }
+
+    /// <summary>True when the server address is this machine, so its client connections can be inspected.</summary>
+    public bool IsLocal { get; }
+
     public LlamaClient(string baseUrl, string? apiKey = null)
     {
         if (!baseUrl.Contains("://")) baseUrl = "http://" + baseUrl;
         if (!baseUrl.EndsWith('/')) baseUrl += "/";
         _base = new Uri(baseUrl);
+        Port = _base.Port;
+        IsLocal = LlamaMonita.Hardware.ConnectionMonitor.IsLocalHost(_base.Host);
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
         if (!string.IsNullOrEmpty(apiKey))
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);

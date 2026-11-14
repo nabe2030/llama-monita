@@ -9,7 +9,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>LlamaMonita</AssemblyName>
     <RootNamespace>LlamaMonita</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Product>LlamaMonita</Product>
     <Description>An nvtop-style desktop monitor for llama.cpp on Windows (iGPU / dGPU)</Description>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
