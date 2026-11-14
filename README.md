@@ -4,6 +4,14 @@ An nvtop-style desktop monitor for [llama.cpp](https://github.com/ggml-org/llama
 
 "Monita" is モニタ, Japanese for *monitor*. Released to celebrate llama.cpp 1.0.
 
+![LlamaMonita watching a llama-server on a Radeon 780M: GPU utilization in blue, generation speed in green](docs/history/04-fixed-layout.png)
+
+The blue area is GPU utilization (left axis) and the green line is generation speed (right axis). The window can shrink down to a small always-on-top strip:
+
+![Compact view](docs/history/04-fixed-layout-compact.png)
+
+How the screen got here is recorded in [docs/history](docs/history/README.md).
+
 LlamaMonita shows, in one window:
 
 - **llama-server**: loaded model, quantization, context size, per-slot activity and context usage, live generation speed (tok/s), tokens processed this session, and the status of every model in router mode
