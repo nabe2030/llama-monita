@@ -86,149 +86,122 @@
                               Click="PinToggle_Click"/>
             </Grid>
 
-            <!-- hero graphs: GPU utilization and generation speed -->
-            <Grid x:Name="HeroGrid" Grid.Row="1">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="HeroCol0" Width="*"/>
-                    <ColumnDefinition x:Name="HeroCol1" Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition x:Name="HeroRow0" Height="*"/>
-                    <RowDefinition x:Name="HeroRow1" Height="*"/>
-                </Grid.RowDefinitions>
+            <!-- combined graph: GPU utilization (left axis) and generation speed (right axis) -->
+            <Border Grid.Row="1" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                <ItemsControl x:Name="GpuHero" ItemsSource="{Binding Gpus}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <UniformGrid Columns="1"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Style="{StaticResource Card}" Margin="0,0,0,0">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="*"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel>
-                                            <DockPanel LastChildFill="True">
-                                                <Border DockPanel.Dock="Left" Background="#1E3A5F" CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Kind}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource BlueBrush}"/>
-                                                </Border>
-                                                <TextBlock Text="{Binding Name}" Style="{StaticResource Muted}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-                                            </DockPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                                <TextBlock Text="{Binding UtilText}" Style="{StaticResource Big}" Foreground="{StaticResource BlueBrush}"/>
-                                                <TextBlock Text="%" Style="{StaticResource Muted}" FontSize="14" Margin="4,0,0,8" VerticalAlignment="Bottom"/>
-                                                <TextBlock Text="{Binding Engine}" Style="{StaticResource Muted}" Margin="10,0,0,8" VerticalAlignment="Bottom"/>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- left: one block per GPU, in the colour of its line -->
+                        <ItemsControl ItemsSource="{Binding Gpus}" ClipToBounds="True">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,28,0">
+                                        <DockPanel LastChildFill="True" MaxWidth="300" HorizontalAlignment="Left">
+                                            <Border DockPanel.Dock="Left" Background="#1E2A44" CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Kind}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Brush}"/>
+                                            </Border>
+                                            <TextBlock Text="{Binding Name}" Style="{StaticResource Muted}" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                            <TextBlock Text="{Binding UtilText}" Style="{StaticResource Big}" Foreground="{Binding Brush}"/>
+                                            <TextBlock Text="%" Style="{StaticResource Muted}" FontSize="14" Margin="4,0,0,8" VerticalAlignment="Bottom"/>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,5"
+                                                        Visibility="{Binding DataContext.ShowTiles, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolVis}}">
+                                                <StackPanel Margin="22,0,0,0">
+                                                    <TextBlock Text="ENGINE" Style="{StaticResource Label}"/>
+                                                    <TextBlock Text="{Binding Engine}" Style="{StaticResource TileValue}" HorizontalAlignment="Left"/>
+                                                </StackPanel>
+                                                <StackPanel Margin="22,0,0,0" Visibility="{Binding HasTemp, Converter={StaticResource BoolVis}}">
+                                                    <TextBlock Text="TEMP" Style="{StaticResource Label}"/>
+                                                    <TextBlock Text="{Binding TempText}" Style="{StaticResource TileValue}" HorizontalAlignment="Left"/>
+                                                </StackPanel>
+                                                <StackPanel Margin="22,0,0,0" Visibility="{Binding HasPower, Converter={StaticResource BoolVis}}">
+                                                    <TextBlock Text="POWER" Style="{StaticResource Label}"/>
+                                                    <TextBlock Text="{Binding PowerText}" Style="{StaticResource TileValue}" HorizontalAlignment="Left"/>
+                                                </StackPanel>
+                                                <StackPanel Margin="22,0,0,0" Visibility="{Binding HasFan, Converter={StaticResource BoolVis}}">
+                                                    <TextBlock Text="FAN" Style="{StaticResource Label}"/>
+                                                    <TextBlock Text="{Binding FanText}" Style="{StaticResource TileValue}" HorizontalAlignment="Left"/>
+                                                </StackPanel>
                                             </StackPanel>
                                         </StackPanel>
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,8"
-                                                    Visibility="{Binding DataContext.ShowTiles, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolVis}}">
-                                            <StackPanel Margin="20,0,0,0" Visibility="{Binding HasTemp, Converter={StaticResource BoolVis}}">
-                                                <TextBlock Text="TEMP" Style="{StaticResource TileLabel}"/>
-                                                <TextBlock Text="{Binding TempText}" Style="{StaticResource TileValue}"/>
-                                            </StackPanel>
-                                            <StackPanel Margin="20,0,0,0" Visibility="{Binding HasPower, Converter={StaticResource BoolVis}}">
-                                                <TextBlock Text="POWER" Style="{StaticResource TileLabel}"/>
-                                                <TextBlock Text="{Binding PowerText}" Style="{StaticResource TileValue}"/>
-                                            </StackPanel>
-                                            <StackPanel Margin="20,0,0,0" Visibility="{Binding HasFan, Converter={StaticResource BoolVis}}">
-                                                <TextBlock Text="FAN" Style="{StaticResource TileLabel}"/>
-                                                <TextBlock Text="{Binding FanText}" Style="{StaticResource TileValue}"/>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Grid>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
-                                    <local:HistoryChart Grid.Row="1" Values="{Binding UtilHistory}" Maximum="100" Unit="%"
-                                                        Stroke="{StaticResource BlueBrush}" MinHeight="24"/>
-
-                                    <Grid Grid.Row="2" Margin="0,12,0,0"
-                                          Visibility="{Binding DataContext.ShowFooter, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolVis}}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="20"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel>
-                                            <Grid>
-                                                <TextBlock Text="Dedicated memory" Style="{StaticResource Muted}"/>
-                                                <TextBlock Text="{Binding DedicatedText}" HorizontalAlignment="Right" FontSize="12"/>
-                                            </Grid>
-                                            <ProgressBar Value="{Binding DedicatedFraction, Mode=OneWay}" Margin="0,5,0,0"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <Grid>
-                                                <TextBlock Text="Shared memory" Style="{StaticResource Muted}"/>
-                                                <TextBlock Text="{Binding SharedText}" HorizontalAlignment="Right" FontSize="12"/>
-                                            </Grid>
-                                            <ProgressBar Value="{Binding SharedFraction, Mode=OneWay}" Foreground="{StaticResource AmberBrush}" Margin="0,5,0,0"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <Border x:Name="GenHero" Style="{StaticResource Card}">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="8" Height="8" Fill="{Binding StateBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding State}" Style="{StaticResource Muted}" Margin="7,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                    <TextBlock Text="{Binding TokensPerSecond}" Style="{StaticResource Big}" Foreground="{StaticResource GreenBrush}"/>
-                                    <TextBlock Text="tok/s" Style="{StaticResource Muted}" FontSize="14" Margin="6,0,0,8" VerticalAlignment="Bottom"/>
-                                </StackPanel>
+                        <!-- right: generation speed, next to the right-hand axis -->
+                        <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Ellipse Width="8" Height="8" Fill="{Binding StateBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding State}" Style="{StaticResource Muted}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,8"
-                                        Visibility="{Binding ShowTiles, Converter={StaticResource BoolVis}}">
-                                <StackPanel Margin="20,0,0,0">
-                                    <TextBlock Text="PROMPT" Style="{StaticResource TileLabel}"/>
-                                    <TextBlock Text="{Binding SessionPrompt}" Style="{StaticResource TileValue}"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,2,0,0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,22,5"
+                                            Visibility="{Binding ShowTiles, Converter={StaticResource BoolVis}}">
+                                    <StackPanel>
+                                        <TextBlock Text="PROMPT TOKENS" Style="{StaticResource TileLabel}"/>
+                                        <TextBlock Text="{Binding SessionPrompt}" Style="{StaticResource TileValue}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="22,0,0,0">
+                                        <TextBlock Text="GENERATED TOKENS" Style="{StaticResource TileLabel}"/>
+                                        <TextBlock Text="{Binding SessionGenerated}" Style="{StaticResource TileValue}"/>
+                                    </StackPanel>
                                 </StackPanel>
-                                <StackPanel Margin="20,0,0,0">
-                                    <TextBlock Text="GENERATED" Style="{StaticResource TileLabel}"/>
-                                    <TextBlock Text="{Binding SessionGenerated}" Style="{StaticResource TileValue}"/>
-                                </StackPanel>
+                                <TextBlock Text="{Binding TokensPerSecond}" Style="{StaticResource Big}" Foreground="{StaticResource GreenBrush}"/>
+                                <TextBlock Text="tok/s" Style="{StaticResource Muted}" FontSize="14" Margin="6,0,0,8" VerticalAlignment="Bottom"/>
                             </StackPanel>
-                        </Grid>
-
-                        <local:HistoryChart Grid.Row="1" Values="{Binding TpsHistory}" Unit="tok/s"
-                                            Stroke="{StaticResource GreenBrush}" MinHeight="24"/>
-
-                        <Grid Grid.Row="2" Margin="0,12,0,0" Visibility="{Binding ShowFooter, Converter={StaticResource BoolVis}}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Tokens since connect" Style="{StaticResource Muted}"/>
-                            <TextBlock Grid.Column="1" Text="{Binding ServerTotals}" Style="{StaticResource Muted}" HorizontalAlignment="Right" Margin="16,0,0,0"/>
-                            <!-- keeps this footer the same height as the GPU card's memory bars -->
-                            <Border Grid.ColumnSpan="2" Height="28" Width="0"/>
-                        </Grid>
+                        </StackPanel>
                     </Grid>
-                </Border>
-            </Grid>
+
+                    <local:HistoryChart Grid.Row="1" Series="{Binding HeroSeries}" Maximum="100" Unit="%" RightUnit="tok/s" MinHeight="24"/>
+
+                    <!-- memory, one row per GPU -->
+                    <ItemsControl Grid.Row="2" ItemsSource="{Binding Gpus}" Margin="0,6,0,0"
+                                  Visibility="{Binding ShowFooter, Converter={StaticResource BoolVis}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <Grid>
+                                            <TextBlock Text="Dedicated GPU memory" Style="{StaticResource Muted}"/>
+                                            <TextBlock Text="{Binding DedicatedText}" HorizontalAlignment="Right" FontSize="12"/>
+                                        </Grid>
+                                        <ProgressBar Value="{Binding DedicatedFraction, Mode=OneWay}" Foreground="{Binding Brush}" Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <Grid>
+                                            <TextBlock Text="Shared GPU memory" Style="{StaticResource Muted}"/>
+                                            <TextBlock Text="{Binding SharedText}" HorizontalAlignment="Right" FontSize="12"/>
+                                        </Grid>
+                                        <ProgressBar Value="{Binding SharedFraction, Mode=OneWay}" Foreground="{StaticResource AmberBrush}" Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
 
             <!-- compact details -->
             <UniformGrid x:Name="InfoGrid" Grid.Row="2" Margin="-6,6,-6,-6" Rows="1"
@@ -238,7 +211,7 @@
                         <TextBlock Text="MODEL" Style="{StaticResource Label}"/>
                         <TextBlock Text="{Binding ModelName}" FontSize="16" FontWeight="SemiBold" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Text="{Binding ModelDetail}" Style="{StaticResource Muted}" Margin="0,3,0,0"/>
-                        <TextBlock Text="{Binding ServerInfo}" Style="{StaticResource Muted}" Margin="0,3,0,0"/>
+                        <TextBlock Text="{Binding ServerTotals}" Style="{StaticResource Muted}" Margin="0,3,0,0"/>
                     </StackPanel>
                 </Border>
 

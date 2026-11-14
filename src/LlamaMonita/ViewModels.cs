@@ -40,7 +40,10 @@ public sealed class GpuVm : Observable
     private double _dedFrac, _sharedFrac;
     private bool _hasTemp, _hasFan, _hasPower;
     private double[] _util = Array.Empty<double>();
+    private Brush _brush = Palette.Blue;
 
+    /// <summary>Colour of this adapter's line in the combined graph.</summary>
+    public Brush Brush { get => _brush; set => Set(ref _brush, value); }
     public string Name { get => _name; set => Set(ref _name, value); }
     public string Kind { get => _kind; set => Set(ref _kind, value); }
     public string UtilText { get => _utilText; set => Set(ref _utilText, value); }
@@ -64,7 +67,7 @@ public sealed class GpuVm : Observable
         Name = a.Name;
         Kind = a.Integrated switch { true => "iGPU", false => "dGPU", _ => "GPU" };
         UtilText = r.UtilPercent.ToString("0");
-        Engine = r.UtilPercent >= 1 ? PrettyEngine(r.TopEngine) : "";
+        Engine = r.UtilPercent >= 1 && r.TopEngine.Length > 0 ? PrettyEngine(r.TopEngine) : "—";
         DedicatedText = $"{Fmt.Gb(r.DedicatedUsed)} / {Fmt.Gb((long)a.DedicatedTotal)} GB";
         SharedText = $"{Fmt.Gb(r.SharedUsed)} / {Fmt.Gb((long)a.SharedTotal)} GB";
         DedicatedFraction = a.DedicatedTotal > 0 ? Math.Clamp(r.DedicatedUsed / (double)a.DedicatedTotal, 0, 1) : 0;
@@ -120,6 +123,11 @@ public static class Palette
     public static readonly Brush Amber = Frozen(0xFB, 0xBF, 0x24);
     public static readonly Brush Red = Frozen(0xF8, 0x71, 0x71);
     public static readonly Brush Muted = Frozen(0x8B, 0x93, 0xA1);
+    public static readonly Brush Purple = Frozen(0xA7, 0x8B, 0xFA);
+    public static readonly Brush Pink = Frozen(0xF4, 0x72, 0xB6);
+
+    /// <summary>Line colours for GPU adapters, in adapter order. Green is reserved for generation speed.</summary>
+    public static readonly Brush[] GpuSeries = { Blue, Purple, Amber, Pink };
 
     private static Brush Frozen(byte r, byte g, byte b)
     {
@@ -168,6 +176,8 @@ public sealed class MainVm : Observable
     public Brush StateBrush { get => _stateBrush; set => Set(ref _stateBrush, value); }
     public string TokensPerSecond { get => _tps; set => Set(ref _tps, value); }
     public double[] TpsHistory { get => _tpsValues; set => Set(ref _tpsValues, value); }
+    private IReadOnlyList<ChartSeries> _heroSeries = Array.Empty<ChartSeries>();
+    public IReadOnlyList<ChartSeries> HeroSeries { get => _heroSeries; set => Set(ref _heroSeries, value); }
     public string SessionPrompt { get => _sessionPromptText; set => Set(ref _sessionPromptText, value); }
     public string SessionGenerated { get => _sessionGeneratedText; set => Set(ref _sessionGeneratedText, value); }
     public string ServerTotals { get => _serverTotals; set => Set(ref _serverTotals, value); }
@@ -197,7 +207,11 @@ public sealed class MainVm : Observable
     {
         while (Gpus.Count < gpu.Adapters.Count) Gpus.Add(new GpuVm());
         while (Gpus.Count > gpu.Adapters.Count) Gpus.RemoveAt(Gpus.Count - 1);
-        for (int i = 0; i < gpu.Adapters.Count; i++) Gpus[i].Apply(gpu.Adapters[i]);
+        for (int i = 0; i < gpu.Adapters.Count; i++)
+        {
+            Gpus[i].Brush = Palette.GpuSeries[i % Palette.GpuSeries.Length];
+            Gpus[i].Apply(gpu.Adapters[i]);
+        }
 
         CpuText = $"{sys.CpuPercent:0}%";
         CpuHistory = _cpuHistory.Push(sys.CpuPercent);
@@ -337,5 +351,11 @@ public sealed class MainVm : Observable
     {
         TokensPerSecond = tps.ToString("0.0");
         TpsHistory = _tpsHistory.Push(tps);
+
+        // Combined graph: GPU utilization per adapter on the left axis, generation speed on the right.
+        var series = new List<ChartSeries>(Gpus.Count + 1);
+        foreach (var g in Gpus) series.Add(new ChartSeries(g.UtilHistory, g.Brush));
+        series.Add(new ChartSeries(TpsHistory, Palette.Green, RightAxis: true, Fill: false));
+        HeroSeries = series;
     }
 }
