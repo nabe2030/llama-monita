@@ -32,7 +32,12 @@ public partial class App : Application
             return;
         }
 
-        new MainWindow(url, apiKey, Arg("--screenshot")).Show();
+        // --size WxH sets the initial window size (used with --screenshot to capture each layout).
+        Size? size = null;
+        if (Arg("--size")?.Split('x') is [var sw, var sh] && double.TryParse(sw, out double pw) && double.TryParse(sh, out double ph))
+            size = new Size(pw, ph);
+
+        new MainWindow(url, apiKey, Arg("--screenshot"), size).Show();
     }
 
     private static async Task<string> ProbeAsync(string url, string? apiKey)
