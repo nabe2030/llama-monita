@@ -10,6 +10,15 @@ public partial class App : Application
 {
     public const string DefaultUrl = "http://127.0.0.1:8080";
 
+    /// <summary>Version from the project file (&lt;Version&gt;), without the build metadata.</summary>
+    public static string Version { get; } =
+        (System.Reflection.Assembly.GetExecutingAssembly()
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "0.0.0")
+        .Split('+')[0];
+
+    public static string ReleaseNotesUrl => "https://github.com/nabe2030/llama-monita/releases/tag/v" + Version;
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -40,7 +49,10 @@ public partial class App : Application
         // --shot-delay N: seconds to collect history before --screenshot captures (default 14).
         int shotDelay = int.TryParse(Arg("--shot-delay"), out int sd) ? sd : 14;
 
-        new MainWindow(url, apiKey, Arg("--screenshot"), size, shotDelay).Show();
+        // --log starts with the "Request log" toggle on.
+        // --metrics-listen [ADDRESS:]PORT serves Prometheus metrics (loopback unless an address is given).
+        // --log-dir PATH writes the request log there instead of %LOCALAPPDATA%\LlamaMonita\requests.
+        new MainWindow(url, apiKey, Arg("--screenshot"), size, shotDelay, e.Args.Contains("--log"), Arg("--log-dir"), Arg("--metrics-listen")).Show();
     }
 
     private static async Task<string> ProbeAsync(string url, string? apiKey)
