@@ -37,7 +37,10 @@ public partial class App : Application
         if (Arg("--size")?.Split('x') is [var sw, var sh] && double.TryParse(sw, out double pw) && double.TryParse(sh, out double ph))
             size = new Size(pw, ph);
 
-        new MainWindow(url, apiKey, Arg("--screenshot"), size).Show();
+        // --shot-delay N: seconds to collect history before --screenshot captures (default 14).
+        int shotDelay = int.TryParse(Arg("--shot-delay"), out int sd) ? sd : 14;
+
+        new MainWindow(url, apiKey, Arg("--screenshot"), size, shotDelay).Show();
     }
 
     private static async Task<string> ProbeAsync(string url, string? apiKey)

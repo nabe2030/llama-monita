@@ -45,7 +45,10 @@ dotnet build src/LlamaMonita -c Release
 - GPU values describe the machine LlamaMonita runs on. When you point it at a remote server you get that server's model and token data, with the local machine's GPU.
 - Temperature, fan and power come from the display driver. Integrated GPUs commonly report no fan, and some drivers report nothing at all; missing values are simply not shown.
 - GPU utilization is the busiest engine of the adapter (for example *Compute* under Vulkan or CUDA), the same way Task Manager picks its headline number.
-- Tested on: Ryzen 7 8845HS / Radeon 780M, Vulkan build of llama.cpp b12110. Reports from other hardware are welcome.
+- Power is shown for discrete adapters only. The figure integrated GPUs report does not follow load (a Radeon 780M reports 5% of maximum at full load).
+- Token counts come from `/slots`: `n_prompt_tokens` there is the whole slot context (prompt plus generated tokens), so the prompt size is taken from `n_prompt_tokens_processed + n_prompt_tokens_cache`.
+- In router mode llama-server does not serve `/metrics` (HTTP 501, checked on b12110 and b12359), so server-wide totals are only shown for a single-model server started with `--metrics`.
+- Tested on: Ryzen 7 8845HS / Radeon 780M, Vulkan builds of llama.cpp b12110 and b12359 (v1.0.0). Reports from other hardware are welcome.
 
 ## License
 

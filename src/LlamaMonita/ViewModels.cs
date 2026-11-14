@@ -74,7 +74,9 @@ public sealed class GpuVm : Observable
         SharedFraction = a.SharedTotal > 0 ? Math.Clamp(r.SharedUsed / (double)a.SharedTotal, 0, 1) : 0;
         if (r.TemperatureC is { } t) { TempText = $"{t:0} °C"; HasTemp = true; } else TempText = "—";
         if (r.FanRpm is { } f) { FanText = $"{f:N0} rpm"; HasFan = true; } else FanText = "—";
-        if (r.PowerPercent is { } p) { PowerText = $"{p:0}%"; HasPower = true; } else PowerText = "—";
+        // Integrated GPUs report a power figure that does not follow load (5% at full load on a Radeon 780M),
+        // so it is only shown for discrete adapters.
+        if (r.PowerPercent is { } p && a.Integrated != true) { PowerText = $"{p:0}%"; HasPower = true; } else PowerText = "—";
         UtilHistory = _history.Push(r.UtilPercent);
     }
 
@@ -146,8 +148,8 @@ public sealed class MainVm : Observable
 {
     private sealed class SlotTrack
     {
-        public int Task = int.MinValue, Prompt, Decoded, PromptBase, DecodedBase;
-        public long Stamp;
+        public int Task = int.MinValue, Prompt, Generated;
+        public bool Counted;   // false for a task that had already finished when we first saw the slot
     }
 
     private readonly Dictionary<int, SlotTrack> _tracks = new();
@@ -161,7 +163,7 @@ public sealed class MainVm : Observable
         _slotsNote = "", _title = "LlamaMonita";
     private Brush _statusBrush = Palette.Muted, _stateBrush = Palette.Muted;
     private double[] _tpsValues = Array.Empty<double>(), _cpuValues = Array.Empty<double>(), _ramValues = Array.Empty<double>();
-    private bool _showModels, _showTopBar = true, _showInfo = true, _showTiles = true, _showFooter = true;
+    private bool _showModels, _showTopBar = true, _showInfo = true, _showTiles = true, _showTokenTiles = true, _showFooter = true;
 
     public ObservableCollection<GpuVm> Gpus { get; } = new();
     public ObservableCollection<SlotVm> Slots { get; } = new();
@@ -194,6 +196,7 @@ public sealed class MainVm : Observable
     public bool ShowTopBar { get => _showTopBar; set => Set(ref _showTopBar, value); }
     public bool ShowInfo { get => _showInfo; set => Set(ref _showInfo, value); }
     public bool ShowTiles { get => _showTiles; set => Set(ref _showTiles, value); }
+    public bool ShowTokenTiles { get => _showTokenTiles; set => Set(ref _showTokenTiles, value); }
     public bool ShowFooter { get => _showFooter; set => Set(ref _showFooter, value); }
 
     public void ResetSession()
@@ -254,7 +257,7 @@ public sealed class MainVm : Observable
         for (int i = 0; i < s.Models.Count; i++)
         {
             Models[i].Id = s.Models[i].Id;
-            Models[i].Status = s.Models[i].Status;
+            Models[i].Status = s.Models[i].Status == "unloaded" ? "" : s.Models[i].Status;   // grey dot already says "not loaded"
             Models[i].Brush = s.Models[i].Status switch { "loaded" => Palette.Green, "loading" => Palette.Amber, _ => Palette.Muted };
         }
 
@@ -277,29 +280,35 @@ public sealed class MainVm : Observable
             var slot = s.Slots[i];
             if (!_tracks.TryGetValue(slot.Id, out var t))
             {
-                // First sight: whatever the slot already holds predates this session.
-                t = new SlotTrack { Task = slot.TaskId, Prompt = slot.PromptTokens, Decoded = slot.Decoded, PromptBase = slot.PromptTokens, DecodedBase = slot.Decoded, Stamp = now };
+                // First sight: a task that is already finished predates this session and is not counted.
+                t = new SlotTrack { Task = slot.TaskId, Counted = slot.IsProcessing };
                 _tracks[slot.Id] = t;
             }
-            else if (slot.TaskId != t.Task || slot.Decoded < t.Decoded)
+            else if (slot.TaskId != t.Task)
             {
-                _sessionPrompt += t.Prompt - t.PromptBase;
-                _sessionGenerated += t.Decoded - t.DecodedBase;
+                if (t.Counted) { _sessionPrompt += t.Prompt; _sessionGenerated += t.Generated; }
                 t.Task = slot.TaskId;
-                t.Prompt = t.Decoded = t.PromptBase = t.DecodedBase = 0;
-                t.Stamp = now;
+                t.Prompt = t.Generated = 0;
+                t.Counted = true;
             }
 
-            t.Prompt = Math.Max(t.Prompt, slot.PromptTokens);
-            t.Decoded = slot.Decoded;
-            t.Stamp = now;
-            livePrompt += t.Prompt - t.PromptBase;
-            liveGenerated += t.Decoded - t.DecodedBase;
+            if (slot.IsProcessing)
+            {
+                t.Prompt = Math.Max(t.Prompt, slot.PromptSize);
+                t.Generated = Math.Max(t.Generated, slot.Decoded);
+            }
+            else if (t.Prompt > 0)
+            {
+                // n_decoded resets when the slot goes idle; the final context size still holds the
+                // tokens generated after our last poll.
+                t.Generated = Math.Max(t.Generated, slot.ContextTokens - t.Prompt);
+            }
+            if (t.Counted) { livePrompt += t.Prompt; liveGenerated += t.Generated; }
 
             var vm = Slots[i];
             vm.Title = slot.Id.ToString();
             vm.StateBrush = slot.IsProcessing ? Palette.Green : Palette.Muted;
-            int usedCtx = slot.PromptTokens + slot.Decoded;
+            int usedCtx = slot.ContextTokens;
             vm.Detail = $"{usedCtx:N0} / {slot.NCtx:N0}";
             vm.Fraction = slot.NCtx > 0 ? Math.Clamp(usedCtx / (double)slot.NCtx, 0, 1) : 0;
         }
@@ -342,7 +351,7 @@ public sealed class MainVm : Observable
         }
         else
         {
-            ServerTotals = "Server totals need --metrics";
+            ServerTotals = ServerInfo;   // no /metrics: show the server line instead (README explains --metrics)
         }
         WindowTitle = hasModel ? $"LlamaMonita — {ModelName} · {TokensPerSecond} tok/s" : "LlamaMonita";
     }

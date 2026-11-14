@@ -18,6 +18,8 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="HorizontalAlignment" Value="Right"/>
             <Setter Property="Margin" Value="0,1,0,0"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
 
         <Style x:Key="Pill" TargetType="ToggleButton">
@@ -75,8 +77,11 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="UrlBox" Width="230" KeyDown="UrlBox_KeyDown"/>
-                <Button Grid.Column="1" Content="Connect" Margin="8,0,0,0" Click="Connect_Click"/>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="SERVER" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="UrlBox" Width="210" KeyDown="UrlBox_KeyDown" TextChanged="UrlBox_TextChanged" ToolTip="Address of the llama-server to watch. Edit it and press Enter or Connect to switch servers."/>
+                </StackPanel>
+                <Button x:Name="ConnectButton" Grid.Column="1" Content="Connect" Margin="8,0,0,0" Click="Connect_Click" IsEnabled="False" ToolTip="Switch to the server address typed on the left"/>
                 <DockPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,12,0" LastChildFill="True">
                     <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Fill="{Binding StatusBrush}" VerticalAlignment="Center"/>
                     <TextBlock DockPanel.Dock="Left" Text="{Binding Status}" Margin="8,0,0,0" VerticalAlignment="Center"/>
@@ -110,7 +115,7 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <StackPanel Margin="0,0,28,0">
+                                    <StackPanel Margin="0,0,16,0">
                                         <DockPanel LastChildFill="True" MaxWidth="300" HorizontalAlignment="Left">
                                             <Border DockPanel.Dock="Left" Background="#1E2A44" CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Kind}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Brush}"/>
@@ -118,23 +123,23 @@
                                             <TextBlock Text="{Binding Name}" Style="{StaticResource Muted}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                                         </DockPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                            <TextBlock Text="{Binding UtilText}" Style="{StaticResource Big}" Foreground="{Binding Brush}"/>
+                                            <TextBlock Text="{Binding UtilText}" Style="{StaticResource Big}" Foreground="{Binding Brush}" Width="62" TextAlignment="Right"/>
                                             <TextBlock Text="%" Style="{StaticResource Muted}" FontSize="14" Margin="4,0,0,8" VerticalAlignment="Bottom"/>
                                             <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,0,5"
                                                         Visibility="{Binding DataContext.ShowTiles, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolVis}}">
-                                                <StackPanel Margin="22,0,0,0">
+                                                <StackPanel Margin="16,0,0,0" Width="86" ToolTip="Busiest GPU engine. Compute = Vulkan / CUDA work such as llama.cpp; 3D = desktop rendering.">
                                                     <TextBlock Text="ENGINE" Style="{StaticResource Label}"/>
                                                     <TextBlock Text="{Binding Engine}" Style="{StaticResource TileValue}" HorizontalAlignment="Left"/>
                                                 </StackPanel>
-                                                <StackPanel Margin="22,0,0,0" Visibility="{Binding HasTemp, Converter={StaticResource BoolVis}}">
+                                                <StackPanel Margin="16,0,0,0" Width="60" Visibility="{Binding HasTemp, Converter={StaticResource BoolVis}}">
                                                     <TextBlock Text="TEMP" Style="{StaticResource Label}"/>
                                                     <TextBlock Text="{Binding TempText}" Style="{StaticResource TileValue}" HorizontalAlignment="Left"/>
                                                 </StackPanel>
-                                                <StackPanel Margin="22,0,0,0" Visibility="{Binding HasPower, Converter={StaticResource BoolVis}}">
+                                                <StackPanel Margin="16,0,0,0" Width="54" Visibility="{Binding HasPower, Converter={StaticResource BoolVis}}">
                                                     <TextBlock Text="POWER" Style="{StaticResource Label}"/>
                                                     <TextBlock Text="{Binding PowerText}" Style="{StaticResource TileValue}" HorizontalAlignment="Left"/>
                                                 </StackPanel>
-                                                <StackPanel Margin="22,0,0,0" Visibility="{Binding HasFan, Converter={StaticResource BoolVis}}">
+                                                <StackPanel Margin="16,0,0,0" Width="84" Visibility="{Binding HasFan, Converter={StaticResource BoolVis}}">
                                                     <TextBlock Text="FAN" Style="{StaticResource Label}"/>
                                                     <TextBlock Text="{Binding FanText}" Style="{StaticResource TileValue}" HorizontalAlignment="Left"/>
                                                 </StackPanel>
@@ -152,18 +157,18 @@
                                 <TextBlock Text="{Binding State}" Style="{StaticResource Muted}" Margin="7,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,2,0,0">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,22,5"
-                                            Visibility="{Binding ShowTiles, Converter={StaticResource BoolVis}}">
-                                    <StackPanel>
-                                        <TextBlock Text="PROMPT TOKENS" Style="{StaticResource TileLabel}"/>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,0,16,5"
+                                            Visibility="{Binding ShowTokenTiles, Converter={StaticResource BoolVis}}">
+                                    <StackPanel Width="84" ToolTip="Prompt tokens processed since this window connected">
+                                        <TextBlock Text="PROMPT" Style="{StaticResource TileLabel}"/>
                                         <TextBlock Text="{Binding SessionPrompt}" Style="{StaticResource TileValue}"/>
                                     </StackPanel>
-                                    <StackPanel Margin="22,0,0,0">
-                                        <TextBlock Text="GENERATED TOKENS" Style="{StaticResource TileLabel}"/>
+                                    <StackPanel Margin="16,0,0,0" Width="90" ToolTip="Tokens generated since this window connected">
+                                        <TextBlock Text="GENERATED" Style="{StaticResource TileLabel}"/>
                                         <TextBlock Text="{Binding SessionGenerated}" Style="{StaticResource TileValue}"/>
                                     </StackPanel>
                                 </StackPanel>
-                                <TextBlock Text="{Binding TokensPerSecond}" Style="{StaticResource Big}" Foreground="{StaticResource GreenBrush}"/>
+                                <TextBlock Text="{Binding TokensPerSecond}" Style="{StaticResource Big}" Foreground="{StaticResource GreenBrush}" Width="96" TextAlignment="Right"/>
                                 <TextBlock Text="tok/s" Style="{StaticResource Muted}" FontSize="14" Margin="6,0,0,8" VerticalAlignment="Bottom"/>
                             </StackPanel>
                         </StackPanel>
