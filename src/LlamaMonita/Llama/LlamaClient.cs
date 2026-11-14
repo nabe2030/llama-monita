@@ -7,7 +7,10 @@ namespace LlamaMonita.Llama;
 
 public sealed record ModelEntry(string Id, string Status);
 
-public sealed record SlotInfo(int Id, bool IsProcessing, int TaskId, int NCtx, int PromptTokens, int Decoded, bool Speculative);
+/// <param name="ContextTokens">n_prompt_tokens: every token currently in the slot's context (prompt plus what has been generated).</param>
+/// <param name="PromptSize">Size of the request's prompt: tokens processed plus tokens reused from the cache. 0 once the slot is idle.</param>
+/// <param name="Decoded">Tokens generated so far. Resets to 0 when the slot goes idle.</param>
+public sealed record SlotInfo(int Id, bool IsProcessing, int TaskId, int NCtx, int ContextTokens, int PromptSize, int Decoded, bool Speculative);
 
 public sealed class LlamaSnapshot
 {
@@ -96,7 +99,8 @@ public sealed class LlamaClient : IDisposable
                     if (next is JsonArray na) next = na.Count > 0 ? na[0] : null;
                     s.Slots.Add(new SlotInfo(
                         Int(n?["id"]), Bool(n?["is_processing"]), Int(n?["id_task"], -1), Int(n?["n_ctx"]),
-                        Int(n?["n_prompt_tokens"]), Int(next?["n_decoded"]), Bool(n?["speculative"])));
+                        Int(n?["n_prompt_tokens"]), Int(n?["n_prompt_tokens_processed"]) + Int(n?["n_prompt_tokens_cache"]),
+                        Int(next?["n_decoded"]), Bool(n?["speculative"])));
                 }
             }
 

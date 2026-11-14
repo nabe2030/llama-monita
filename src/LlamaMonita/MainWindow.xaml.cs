@@ -18,20 +18,25 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _cts = new();
     private readonly string? _apiKey;
     private readonly string? _screenshotPath;
+    private readonly int _screenshotDelay;
     private volatile LlamaClient _client;
+    private string _connectedUrl = "";
 
     private static string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LlamaMonita", "settings.json");
 
-    public MainWindow(string? url, string? apiKey, string? screenshotPath, Size? size = null)
+    public MainWindow(string? url, string? apiKey, string? screenshotPath, Size? size = null, int screenshotDelay = 14)
     {
         InitializeComponent();
         DataContext = _vm;
         _apiKey = apiKey;
         _screenshotPath = screenshotPath;
+        _screenshotDelay = screenshotDelay;
         if (size is { } sz) { Width = sz.Width; Height = sz.Height; }
         UrlBox.Text = url ?? LoadSavedUrl() ?? App.DefaultUrl;
         _client = new LlamaClient(UrlBox.Text, _apiKey);
+        _connectedUrl = UrlBox.Text.Trim();
+        ConnectButton.IsEnabled = false;
         _vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(MainVm.ShowModels)) UpdateLayoutMode();
@@ -63,16 +68,18 @@ public partial class MainWindow : Window
         if (w <= 0 || h <= 0) return;
 
         bool mini = h < 300 || w < 440;
-        bool infoOneRow = w >= 1000;
-        double infoHeight = infoOneRow ? 170 : 330;
+        bool infoOneRow = w >= 740;
+        double infoHeight = infoOneRow ? 190 : 330;
         double barHeight = mini ? 0 : 48;
-        bool showInfo = !mini && h - barHeight - infoHeight >= 260;
+        bool showInfo = !mini && h - barHeight - infoHeight >= 200;
         double graphArea = h - barHeight - (showInfo ? infoHeight : 0);
 
         _vm.ShowTopBar = !mini;
         _vm.ShowInfo = showInfo;
         // Sensor and token tiles sit beside the headline numbers; each extra GPU needs its own block.
-        _vm.ShowTiles = w >= 760 + 330 * Math.Max(0, _vm.Gpus.Count - 1);
+        int extraGpus = Math.Max(0, _vm.Gpus.Count - 1);
+        _vm.ShowTiles = w >= 480 + 340 * extraGpus;
+        _vm.ShowTokenTiles = w >= 760 + 340 * extraGpus;
         _vm.ShowFooter = !mini && graphArea >= 240 + 40 * _vm.Gpus.Count;
 
         Shell.Padding = new Thickness(mini ? 8 : 16);
@@ -122,7 +129,7 @@ public partial class MainWindow : Window
                     _vm.ApplyHardware(g, s, pids.Length);
                     _vm.ApplyServer(server);
                 });
-                if (_screenshotPath is not null && ++ticks == 14)
+                if (_screenshotPath is not null && ++ticks == _screenshotDelay)
                     await Dispatcher.InvokeAsync(() => { SaveScreenshot(_screenshotPath); Close(); });
             } while (await timer.WaitForNextTickAsync(ct));
         }
@@ -139,11 +146,19 @@ public partial class MainWindow : Window
             old.Dispose();
             _vm.ResetSession();
             SaveUrl(UrlBox.Text.Trim());
+            _connectedUrl = UrlBox.Text.Trim();
+            ConnectButton.IsEnabled = false;
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "LlamaMonita", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    // The Connect button is only live while the box holds an address other than the one being watched.
+    private void UrlBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (ConnectButton is not null) ConnectButton.IsEnabled = UrlBox.Text.Trim() != _connectedUrl;
     }
 
     private void Connect_Click(object sender, RoutedEventArgs e) => Connect();
