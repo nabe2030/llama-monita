@@ -9,13 +9,15 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>LlamaMonita</AssemblyName>
     <RootNamespace>LlamaMonita</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
+    <ApplicationIcon>Assets\LlamaMonita.ico</ApplicationIcon>
     <Product>LlamaMonita</Product>
     <Description>An nvtop-style desktop monitor for llama.cpp on Windows (iGPU / dGPU)</Description>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="Assets\LlamaMonita.ico" />
     <Using Include="System.IO" />
     <Using Include="System.Net.Http" />
   </ItemGroup>

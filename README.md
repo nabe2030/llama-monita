@@ -1,4 +1,4 @@
-# LlamaMonita
+# <img src="docs/icon-256.png" alt="" width="40" align="top"> LlamaMonita
 
 An nvtop-style desktop monitor for [llama.cpp](https://github.com/ggml-org/llama.cpp) on Windows 11, for both integrated and discrete GPUs.
 

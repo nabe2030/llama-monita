@@ -4,6 +4,11 @@ All notable changes to LlamaMonita are recorded here. Versions follow [Semantic 
 the version lives in `src/LlamaMonita/LlamaMonita.csproj` (`<Version>`), is shown next to the name in the window,
 and each release is tagged `vX.Y.Z` on GitHub with these notes.
 
+## 0.2.1 — 2026-11-15
+
+### Added
+- App icon: a llama with a pulse line, in the colours of the graph (exe, window, taskbar and Start menu).
+
 ## 0.2.0 — 2026-11-15
 
 ### Added
