@@ -203,6 +203,72 @@ public partial class MainWindow : Window
 
     private void Connect_Click(object sender, RoutedEventArgs e) => Connect();
 
+    /// <summary>Router mode: clicking a model that is not loaded offers to switch to it.</summary>
+    private async void ModelRow_Click(object sender, MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not ModelVm row || !row.CanSwitch) return;
+        string current = _vm.Models.FirstOrDefault(m => m.Status == "loaded")?.Id ?? "";
+        string text = current.Length > 0
+            ? $"Switch the router from {current} to {row.Id}?\n\n{current} will be unloaded first. Loading can take a minute or more, and the server cannot answer until it is done."
+            : $"Load {row.Id} on the router?\n\nLoading can take a minute or more.";
+        if (_vm.BusySlots > 0)
+            text += $"\n\n{_vm.BusySlots} request{(_vm.BusySlots == 1 ? " is" : "s are")} being processed right now and will be stopped.";
+        text += "\n\nClients that ask for another model by name will switch it again.";
+        var icon = _vm.BusySlots > 0 ? MessageBoxImage.Warning : MessageBoxImage.Question;
+        if (MessageBox.Show(this, text, "Switch model", MessageBoxButton.OKCancel, icon, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
+
+        row.CanSwitch = false;   // until the next poll shows "loading"
+        var client = _client;
+        string target = row.Id;
+        LogEvent($"switch requested: {current} -> {target} on {_connectedUrl} (busy slots: {_vm.BusySlots})");
+        string? error;
+        try { error = await client.LoadModelAsync(target, _cts.Token); }
+        catch (OperationCanceledException) { return; }   // window closing
+        if (error is not null)
+        {
+            LogEvent($"switch to {target} refused: {error}");
+            MessageBox.Show(this, $"The router did not accept the switch to {target}.\n\n{error}", "Switch model", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        LogEvent($"switch to {target} accepted, loading");
+
+        // Follow the load to the end: report it if the model fails to load or another one ends up loaded
+        // (another client asked for a different model in the meantime).
+        var started = Stopwatch.StartNew();
+        while (started.Elapsed < TimeSpan.FromMinutes(10))
+        {
+            try { await Task.Delay(2000, _cts.Token); } catch (OperationCanceledException) { return; }
+            if (!ReferenceEquals(client, _client)) return;   // reconnected to another server
+            var models = await client.GetModelsAsync(_cts.Token);
+            if (models is null) continue;
+            var mine = models.FirstOrDefault(m => m.Id == target);
+            if (mine?.Status == "loading") continue;
+            if (mine?.Status == "loaded")
+            {
+                LogEvent($"switch to {target} done in {started.Elapsed.TotalSeconds:0} s");
+                return;
+            }
+            string other = models.FirstOrDefault(m => m.Status is "loaded" or "loading")?.Id ?? "";
+            if (other.Length == 0 && started.Elapsed < TimeSpan.FromSeconds(10)) continue;   // not shown as loading yet
+            string why = other.Length > 0 ? $"{other} is {(models.First(m => m.Id == other).Status)} instead (another client asked for it)" : $"{target} is {mine?.Status ?? "missing"}";
+            LogEvent($"switch to {target} did not complete: {why}");
+            MessageBox.Show(this, $"The switch to {target} did not complete.\n\n{why}.\n\nDetails are in the server log and in {EventLogPath ?? "(no log folder)"}.", "Switch model", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        LogEvent($"switch to {target}: still not loaded after 10 minutes");
+    }
+
+    private string? EventLogPath => _vm.Log is null ? null : Path.Combine(_vm.Log.Folder, "events.log");
+
+    /// <summary>Appends one line to events.log next to the request log (model switches and their outcome).</summary>
+    private void LogEvent(string message)
+    {
+        if (EventLogPath is not { } path) return;
+        try { File.AppendAllText(path, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {message}{Environment.NewLine}"); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
     private void UrlBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter) Connect();

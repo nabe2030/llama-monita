@@ -4,6 +4,13 @@ An nvtop-style desktop monitor for [llama.cpp](https://github.com/ggml-org/llama
 
 "Monita" is モニタ, Japanese for *monitor*. Released to celebrate llama.cpp 1.0.
 
+## What's new in 0.3.0 (2026-11-15)
+
+- **Switch models from the window.** In router mode, click a model that is not loaded and confirm. LlamaMonita asks the router to load it (`POST /models/load`, nothing is generated), follows the load to the end and warns you if another model ended up loaded instead. See [Switching models](#switching-models-router-mode).
+- **Watching no longer gets in the way of a switch.** Polling a router could make it reload the model that was being unloaded, so a switch by LlamaMonita or by any other client could fail. Every per-model query now carries `autoload=false`.
+
+Earlier changes are in the [CHANGELOG](CHANGELOG.md) and on the [Releases page](https://github.com/nabe2030/llama-monita/releases).
+
 ![LlamaMonita watching a llama-server on a Radeon 780M: GPU utilization in blue, generation speed in green](docs/screenshots/overview.png)
 
 The blue area is GPU utilization (left axis) and the green line is generation speed (right axis). Below it are the models, the system load and the request log. The window can shrink down to a small always-on-top strip:
@@ -33,7 +40,8 @@ These totals cover requests recorded by LlamaMonita; source identification and p
 - **Shared GPU memory is a first-class value.** On integrated GPUs (Radeon 780M / 890M / 8060S, Intel Arc, …) models live in *shared* memory, which most GPU monitors do not show.
 - **Vendor-neutral.** It uses the same Windows sources as Task Manager (DXGI, the WDDM `GPU *` performance counters and D3DKMT adapter data), so AMD, NVIDIA and Intel adapters work without vendor SDKs.
 - **No administrator rights, no helper process, no kernel driver.**
-- **Read-only.** It only sends `GET` requests. In router mode it never queries a model that is not already loaded, so watching cannot trigger a model load or swap.
+- **Read-only while watching.** Monitoring only sends `GET` requests. In router mode it only queries the loaded model and adds `autoload=false` to every per-model query, so watching cannot trigger a model load or swap, even while another client is switching models.
+- **Switch models in router mode.** Click a model that is not loaded and confirm; see [Switching models](#switching-models-router-mode). This is the only request that changes the server.
 - **Works without `--metrics`.** Live speed and session token counts come from `/slots`. If the server was started with `--metrics`, server-wide totals are shown as well.
 
 ## Download
@@ -57,6 +65,12 @@ LlamaMonita.exe [--url http://127.0.0.1:8080] [--api-key KEY]
 The API key can also be supplied through the `LLAMA_API_KEY` environment variable. The last URL you connect to is remembered.
 
 `LlamaMonita.exe --probe out.json` writes a few samples of every data source to a file without opening a window. Attach it to bug reports.
+
+### Switching models (router mode)
+
+Click a model that is not loaded in the *Models (router)* card and confirm the dialog. LlamaMonita sends `POST /models/load`, which loads the model without generating anything (with `--models-max 1` the router unloads the current model first). The request is sent only after you confirm, and the dialog warns you when requests are being processed (they are stopped by the switch).
+
+LlamaMonita then follows the load and warns you if another model ended up loaded: a client that asks for another model by name switches it again. Each switch and its outcome is written to `events.log` in the request log folder (right-click → *Open request log folder*).
 
 ### Request history
 

@@ -141,6 +141,9 @@ public sealed class ModelVm : Observable
     private bool _hasDetail;
     public bool HasDetail { get => _hasDetail; private set => Set(ref _hasDetail, value); }
     public Brush Brush { get => _brush; set => Set(ref _brush, value); }
+    /// <summary>Router mode only: the model is not loaded and nothing is loading, so a click can switch to it.</summary>
+    private bool _canSwitch;
+    public bool CanSwitch { get => _canSwitch; set => Set(ref _canSwitch, value); }
 }
 
 public static class Palette
@@ -206,6 +209,8 @@ public sealed class MainVm : Observable
     public ObservableCollection<GpuVm> Gpus { get; } = new();
     public ObservableCollection<SlotVm> Slots { get; } = new();
     public ObservableCollection<ModelVm> Models { get; } = new();
+    /// <summary>Slots processing a request at the last poll (used to warn before a model switch).</summary>
+    public int BusySlots { get; private set; }
 
     public string Status { get => _status; set => Set(ref _status, value); }
     public Brush StatusBrush { get => _statusBrush; set => Set(ref _statusBrush, value); }
@@ -437,7 +442,10 @@ public sealed class MainVm : Observable
             Models[i].Id = s.Models[i].Id;
             Models[i].Status = s.Models[i].Status == "unloaded" ? "" : s.Models[i].Status;   // grey dot already says "not loaded"
             Models[i].Brush = s.Models[i].Status switch { "loaded" => Palette.Green, "loading" => Palette.Amber, _ => Palette.Muted };
+            Models[i].CanSwitch = !s.Loading && s.Models[i].Status is not ("loaded" or "loading");
         }
+        if (!s.IsRouter && Models.Count > 0) Models[0].CanSwitch = false;
+        BusySlots = s.Slots.Count(x => x.IsProcessing);
 
         bool hasModel = !string.IsNullOrEmpty(s.ActiveModel);
 

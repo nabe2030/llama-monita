@@ -32,8 +32,9 @@ public sealed class LlamaSnapshot
 }
 
 /// <summary>
-/// Read-only client for llama-server. Sends GET requests only, and in router mode never queries a
+/// Client for llama-server. Polling sends GET requests only, and in router mode never queries a
 /// model that is not already loaded (so monitoring cannot trigger a model load or swap).
+/// The one exception is <see cref="LoadModelAsync"/>, which runs only when the user confirms a switch.
 /// </summary>
 public sealed class LlamaClient : IDisposable
 {
@@ -55,9 +56,24 @@ public sealed class LlamaClient : IDisposable
         Port = _base.Port;
         IsLocal = LlamaMonita.Hardware.ConnectionMonitor.IsLocalHost(_base.Host);
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+        // POST /models/load answers only after the old instance has exited and the new one is spawned
+        // (2-4 s on a 780M, more on a busy machine), so it gets its own, longer timeout.
+        _loadHttp = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
         if (!string.IsNullOrEmpty(apiKey))
+        {
             _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            _loadHttp.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        }
     }
+
+    private readonly HttpClient _loadHttp;
+
+    /// <summary>
+    /// Set while POST /models/load is in flight. Polling then skips every per-model endpoint: the router
+    /// treats "?model=X" as a request for X, so a poll for the model being unloaded would queue a reload
+    /// of it and could take the slot the new model was meant to get.
+    /// </summary>
+    private volatile string? _switchingTo;
 
     public async Task<LlamaSnapshot> PollAsync(CancellationToken ct)
     {
@@ -77,6 +93,11 @@ public sealed class LlamaClient : IDisposable
                 if (models?["data"] is JsonArray arr)
                     foreach (var m in arr)
                         s.Models.Add(new ModelEntry(Str(m?["id"]) ?? "?", Str(m?["status"]?["value"]) ?? "unknown"));
+                if (_switchingTo is { } target)
+                {
+                    s.ActiveModel = target; s.Loading = true;
+                    return s;   // a switch is in progress: do not touch per-model endpoints
+                }
                 s.ActiveModel = s.Models.FirstOrDefault(m => m.Status == "loaded")?.Id;
                 if (s.ActiveModel is null)
                 {
@@ -84,7 +105,10 @@ public sealed class LlamaClient : IDisposable
                     if (loading is not null) { s.ActiveModel = loading.Id; s.Loading = true; }
                     return s;   // nothing loaded: do not touch per-model endpoints
                 }
-                query = "?model=" + Uri.EscapeDataString(s.ActiveModel);
+                // autoload=false: without it the router treats this GET as a request for the model and, if the
+                // model is being unloaded at that moment (a switch by us or by any other client), queues a
+                // reload of it that can win the slot over the model that was asked for.
+                query = "?model=" + Uri.EscapeDataString(s.ActiveModel) + "&autoload=false";
                 props = await GetJsonAsync("props" + query, ct);
             }
 
@@ -122,6 +146,52 @@ public sealed class LlamaClient : IDisposable
         return s;
     }
 
+    /// <summary>
+    /// Asks a router to load a model (POST /models/load). With --models-max 1 the router unloads the
+    /// current model first. No completion is requested, so nothing is generated. The router answers once
+    /// the old instance has exited and the new one is spawned; the load itself then shows up as "loading"
+    /// in /models. Cancelling the request while it waits cancels the switch, so it is given minutes, not seconds.
+    /// </summary>
+    /// <returns>null on success, otherwise the reason it failed.</returns>
+    public async Task<string?> LoadModelAsync(string model, CancellationToken ct)
+    {
+        _switchingTo = model;
+        try
+        {
+            string? error = null;
+            // "model limit reached": another client's request for the old model took the freed slot first.
+            // That client is served by now, so asking again usually goes through.
+            for (int attempt = 1; attempt <= 3; attempt++)
+            {
+                if (attempt > 1) await Task.Delay(TimeSpan.FromSeconds(3), ct);
+                var body = new JsonObject { ["model"] = model }.ToJsonString();
+                using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+                using var r = await _loadHttp.PostAsync(new Uri(_base, "models/load"), content, ct);
+                if (r.IsSuccessStatusCode) return null;
+                string text = await r.Content.ReadAsStringAsync(ct);
+                error = $"HTTP {(int)r.StatusCode}" + (text.Length > 0 ? $": {(text.Length > 300 ? text[..300] : text)}" : "");
+                if (!text.Contains("limit reached")) break;
+            }
+            return error;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            return ex is TaskCanceledException ? $"no answer within {_loadHttp.Timeout.TotalMinutes:0} minutes" : (ex.InnerException?.Message ?? ex.Message);
+        }
+        finally { _switchingTo = null; }
+    }
+
+    /// <summary>Router mode: the status of every model (GET /models, which never loads anything).</summary>
+    public async Task<List<ModelEntry>?> GetModelsAsync(CancellationToken ct)
+    {
+        try
+        {
+            if (await GetJsonAsync("models", ct) is not { } models || models["data"] is not JsonArray arr) return null;
+            return arr.Select(m => new ModelEntry(Str(m?["id"]) ?? "?", Str(m?["status"]?["value"]) ?? "unknown")).ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { return null; }
+    }
+
     private async Task<Dictionary<string, double>?> GetMetricsAsync(string query, CancellationToken ct)
     {
         // /metrics exists only when the server was started with --metrics; back off when it is absent.
@@ -156,5 +226,5 @@ public sealed class LlamaClient : IDisposable
     private static int Int(JsonNode? n, int fallback = 0) { try { return n is null ? fallback : (int)n.GetValue<double>(); } catch { return fallback; } }
     private static bool Bool(JsonNode? n) { try { return n?.GetValue<bool>() ?? false; } catch { return false; } }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose() { _http.Dispose(); _loadHttp.Dispose(); }
 }
