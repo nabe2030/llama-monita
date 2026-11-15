@@ -4,7 +4,7 @@ An nvtop-style desktop monitor for [llama.cpp](https://github.com/ggml-org/llama
 
 "Monita" is モニタ, Japanese for *monitor*. Released to celebrate llama.cpp 1.0.
 
-![LlamaMonita watching a llama-server on a Radeon 780M: GPU utilization in blue, generation speed in green](docs/history/05-request-log.png)
+![LlamaMonita watching a llama-server on a Radeon 780M: GPU utilization in blue, generation speed in green](docs/screenshots/overview.png)
 
 The blue area is GPU utilization (left axis) and the green line is generation speed (right axis). Below it are the models, the system load and the request log. The window can shrink down to a small always-on-top strip:
 
@@ -18,6 +18,15 @@ LlamaMonita shows, in one window:
 - **GPU**: utilization, dedicated and shared GPU memory, temperature, fan speed and power where the driver reports them
 - **System**: CPU, RAM, and the GPU memory held by local `llama-server` processes
 - **Requests**: when each request started, where it came from (LAN address or local process), which model handled it, tokens, duration and speed. Finished requests are also appended to a monthly CSV file, with per-day totals shown in the window
+
+## See every request and the day's token usage
+
+![Request history with start time, source, model, slot, token counts, duration and generation speed, with today's totals above the list](docs/screenshots/request-history.png)
+
+- **Follow each request.** See when it started (`STARTED`), where it came from (`FROM`), which model and slot handled it (`MODEL`, `SLOT`), its input and generated token counts (`PROMPT`, `GENERATED`), how long it took (`TOOK`), and its generation speed in tokens per second (`TOK/S`).
+- **Track today's cumulative usage.** The `Today` line above the list shows the day's recorded completed requests and cumulative input (`prompt`) and output (`generated`) token counts separately. In this capture: **54 requests, 118,483 input tokens and 8,733 generated tokens**. Saved request history restores these totals when the monitor restarts.
+
+These totals cover requests recorded by LlamaMonita; source identification and polling limits are described under [Request history](#request-history).
 
 ## Why another monitor
 
