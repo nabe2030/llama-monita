@@ -3,6 +3,20 @@
 All notable changes to LlamaMonita are recorded here. Versions follow [Semantic Versioning](https://semver.org/):
 the version lives in `src/LlamaMonita/LlamaMonita.csproj` (`<Version>`), is shown next to the name in the window,
 and each release is tagged `vX.Y.Z` on GitHub with these notes.
+New features raise the minor version (0.3.0 → 0.4.0); small changes and bug fixes raise the patch version (0.3.0 → 0.3.1).
+
+## 0.3.0 — 2026-11-15
+
+### Added
+- Model switching in router mode: click a model that is not loaded in the models card, confirm, and LlamaMonita
+  sends `POST /models/load`. Nothing is generated. The dialog warns when requests are being processed.
+  LlamaMonita follows the load to the end and tells you if another model ended up loaded instead.
+  Switches and their outcome are written to `events.log` in the request log folder.
+
+### Fixed
+- In router mode, polling could make the router reload a model that was being unloaded: the router treats
+  `GET /props?model=X` and `/slots?model=X` as a request for X. Every per-model query now carries `autoload=false`,
+  so watching never loads a model, also while another client switches models.
 
 ## 0.2.1 — 2026-11-15
 

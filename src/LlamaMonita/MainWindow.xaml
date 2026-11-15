@@ -232,14 +232,24 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <StackPanel Margin="0,2">
-                                            <Grid>
+                                            <Grid Background="Transparent" MouseLeftButtonUp="ModelRow_Click">
+                                                <Grid.Style>
+                                                    <Style TargetType="Grid">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding CanSwitch}" Value="True">
+                                                                <Setter Property="Cursor" Value="Hand"/>
+                                                                <Setter Property="ToolTip" Value="Click to switch the router to this model"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Grid.Style>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
                                                 <Ellipse Width="7" Height="7" Fill="{Binding Brush}" VerticalAlignment="Center"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding Id}" Margin="8,0,8,0" TextTrimming="CharacterEllipsis" ToolTip="{Binding Id}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Id}" Margin="8,0,8,0" TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{Binding Brush}" FontSize="12"/>
                                             </Grid>
                                             <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" Margin="15,1,0,2"
