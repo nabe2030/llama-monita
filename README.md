@@ -21,10 +21,10 @@ LlamaMonita shows, in one window:
 
 ## See every request and the day's token usage
 
-![Request history with start time, source, model, slot, token counts, duration and generation speed, with today's totals above the list](docs/screenshots/request-history.png)
+![① Blue frame: per-request history. ② Red frame: today's cumulative requests and input/output tokens.](docs/screenshots/request-history-annotated.png)
 
-- **Follow each request.** See when it started (`STARTED`), where it came from (`FROM`), which model and slot handled it (`MODEL`, `SLOT`), its input and generated token counts (`PROMPT`, `GENERATED`), how long it took (`TOOK`), and its generation speed in tokens per second (`TOK/S`).
-- **Track today's cumulative usage.** The `Today` line above the list shows the day's recorded completed requests and cumulative input (`prompt`) and output (`generated`) token counts separately. In this capture: **54 requests, 118,483 input tokens and 8,733 generated tokens**. Saved request history restores these totals when the monitor restarts.
+- **① Follow each request (blue frame).** See when it started (`STARTED`), where it came from (`FROM`), which model and slot handled it (`MODEL`, `SLOT`), its input and generated token counts (`PROMPT`, `GENERATED`), how long it took (`TOOK`), and its generation speed in tokens per second (`TOK/S`).
+- **② Track today's cumulative usage (red frame).** The `Today` line above the list shows the day's recorded completed requests and cumulative input (`prompt`) and output (`generated`) token counts separately. In this capture: **54 requests, 118,483 input tokens and 8,733 generated tokens**. Saved request history restores these totals when the monitor restarts.
 
 These totals cover requests recorded by LlamaMonita; source identification and polling limits are described under [Request history](#request-history).
 
